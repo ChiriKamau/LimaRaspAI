@@ -6,7 +6,7 @@ import time
 # --- CONFIGURATION ---
 MODEL_PATH = "/home/lima/LimaRaspAI/Quantized/model_quant.tflite"
 IMAGE_PATH = "/home/lima/LimaRaspAI/Images/image1.jpg"
-CONFIDENCE_THRESHOLD = 0.5
+CONFIDENCE_THRESHOLD = 0.25  # Lowered to standard YOLO threshold
 
 # --- LOAD MODEL ---
 print(f"Loading model: {MODEL_PATH}...")
@@ -16,7 +16,6 @@ interpreter.allocate_tensors()
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
-# Get target size
 input_height = input_details[0]['shape'][1]
 input_width = input_details[0]['shape'][2]
 print(f"Model expects input: {input_width}x{input_height}")
@@ -35,24 +34,19 @@ input_image = np.expand_dims(input_image, axis=0)
 input_type = input_details[0]['dtype']
 
 if input_type == np.float32:
-    # Standard Float Model
     print("Normalizing input to 0-1 (Float32)")
     input_image = (np.float32(input_image) / 255.0)
 
 elif input_type == np.int8:
-    # Signed Integer Model (This fixes your error!)
+    # Signed Integer Model Logic
     scale, zero_point = input_details[0]['quantization']
     print(f"Converting to INT8 (Scale: {scale}, Zero Point: {zero_point})")
     
-    # 1. Normalize to 0-1
     input_image = (np.float32(input_image) / 255.0)
-    # 2. Quantize: (Value / Scale) + ZeroPoint
     input_image = (input_image / scale + zero_point)
-    # 3. Cast to INT8
     input_image = input_image.astype(np.int8)
 
 else:
-    # Fallback for UINT8 models
     print("Keeping input as Integer (Uint8)")
     input_image = input_image.astype(np.uint8)
 
@@ -68,32 +62,51 @@ output_data = interpreter.get_tensor(output_details[0]['index'])
 
 print("\n" + "="*30)
 print(f"Inference Time: {(end_time - start_time) * 1000:.2f} ms")
-print(f"Output Shape: {output_data.shape}")
 print("="*30)
 
-# If shape is [1, 84, 8400] -> It's standard YOLOv8
-# We need to transpose it to [1, 8400, 84] to parse boxes easier
+# Transpose if needed: [1, 6, 2100] -> [1, 2100, 6]
 if output_data.shape[1] < output_data.shape[2]:
-    print("Output format is [Channels, Anchors]. Transposing...")
+    print("Transposing output shape...")
     output_data = np.transpose(output_data, (0, 2, 1))
 
-# --- SIMPLE DETECTION CHECK ---
-# Checks for the highest confidence in the whole image
+# --- DETECTION LOOP ---
 boxes = output_data[0]
-found_any = False
+max_confidence_seen = 0.0
+best_class_seen = -1
+found_count = 0
 
-# We iterate a few boxes just to see if it works
-for i, box in enumerate(boxes):
-    if i > 500: break # Don't check everything yet, just a quick sample
-    
-    # box format: [x, y, w, h, class1_score, class2_score...]
+for box in boxes:
+    # box format: [x, y, w, h, class1_score, class2_score]
     scores = box[4:] 
-    max_score = np.max(scores)
+    current_max = np.max(scores)
     
-    if max_score > CONFIDENCE_THRESHOLD:
-        class_id = np.argmax(scores)
-        print(f"Found Class {class_id} with confidence {max_score:.2f}")
-        found_any = True
+    # Track stats for debugging
+    if current_max > max_confidence_seen:
+        max_confidence_seen = current_max
+        best_class_seen = np.argmax(scores)
 
-if not found_any:
-    print("No objects detected above threshold.")
+    if current_max > CONFIDENCE_THRESHOLD:
+        class_id = np.argmax(scores)
+        
+        # Convert xywh (normalized) to pixels
+        cx = box[0] # * input_width (if model outputs normalized coords)
+        cy = box[1] # * input_height
+        w = box[2]  # * input_width
+        h = box[3]  # * input_height
+        
+        # Note: Some quantized models output raw pixels (0-320), some output normalized (0-1).
+        # If your output values are small (like 0.5), uncomment the multiplication above.
+        
+        print(f"✅ FOUND Class {class_id} | Conf: {current_max:.2f} | Center: ({int(cx)}, {int(cy)})")
+        found_count += 1
+
+print("\n" + "-"*30)
+print(f"DEBUG REPORT:")
+print(f"Total Detections > {CONFIDENCE_THRESHOLD}: {found_count}")
+print(f"Highest Confidence seen in ANY box: {max_confidence_seen:.4f}")
+print(f"Best Guess Class: {best_class_seen}")
+print("-"*30 + "\n")
+
+if max_confidence_seen < 0.1:
+    print("⚠️ WARNING: The model is effectively blind (Max Conf < 10%).")
+    print("Likely causes: Normalization mismatch or bad Quantization.")
