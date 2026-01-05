@@ -5,7 +5,7 @@ import time
 
 # --- CONFIGURATION ---
 MODEL_PATH = "/home/lima/LimaRaspAI/Quantized/model_quant.tflite"
-IMAGE_PATH = "/home/lima/LimaRaspAI/Images/image2.jpg"
+IMAGE_PATH = "/home/lima/LimaRaspAI/Images/image3.jpg"
 CONFIDENCE_THRESHOLD = 0.25  # Lowered to standard YOLO threshold
 
 # --- LOAD MODEL ---
