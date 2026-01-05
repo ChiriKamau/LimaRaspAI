@@ -5,7 +5,7 @@ import time
 
 # --- CONFIGURATION ---
 MODEL_PATH = "/home/lima/LimaRaspAI/Quantized/model_quant.tflite"
-IMAGE_PATH = "/home/lima/LimaRaspAI/images/image1.jpg"  # Ensure you have an image here!
+IMAGE_PATH = "/home/lima/LimaRaspAI/Images/image1.jpg"  # Ensure you have an image here!
 CONFIDENCE_THRESHOLD = 0.5
 
 # --- LOAD MODEL ---
