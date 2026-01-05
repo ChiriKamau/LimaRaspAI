@@ -1,11 +1,12 @@
 import cv2
 import numpy as np
 import tflite_runtime.interpreter as tflite
+import os  # <--- Added os library to handle folders
 
 # --- CONFIGURATION ---
 MODEL_PATH = "/home/lima/LimaRaspAI/Quantized/model_quant.tflite"
 IMAGE_PATH = "/home/lima/LimaRaspAI/Images/image1.jpg"
-CONFIDENCE_THRESHOLD = 0.40  # We know your score is ~0.63, so 0.40 is safe
+CONFIDENCE_THRESHOLD = 0.40
 CLASSES = ["Tomato", "Fruit_2", "Fruit_3"] # ⚠️ UPDATE THIS with your real class names!
 
 # --- LOAD MODEL ---
@@ -18,6 +19,10 @@ input_w = input_details[0]['shape'][2]
 
 # --- PREPROCESS ---
 image = cv2.imread(IMAGE_PATH)
+if image is None:
+    print(f"Error: Could not read image from {IMAGE_PATH}")
+    exit()
+
 original_h, original_w = image.shape[:2]
 
 # Resize and Pad logic (Simplified resize)
@@ -59,15 +64,10 @@ for box in boxes:
     if max_score > CONFIDENCE_THRESHOLD:
         class_id = np.argmax(scores)
         
-        # Get Box Coordinates (Normalized 0-1 or Pixels)
-        # YOLOv8 export usually gives center_x, center_y, width, height
+        # Get Box Coordinates
         cx, cy, w, h = box[0], box[1], box[2], box[3]
         
-        # If coordinates are normalized (0-1), multiply by image size
-        # If they are already pixels (0-320), we just scale up to original image
-        
-        # Let's assume they are absolute pixels relative to the 320x320 input
-        # We need to scale them back to the ORIGINAL image size
+        # Scale back to ORIGINAL image size
         scale_x = original_w / input_w
         scale_y = original_h / input_h
         
@@ -90,9 +90,29 @@ for box in boxes:
         cv2.putText(image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         count += 1
 
-# --- SAVE RESULT ---
+# --- SAVE RESULT TO NEW FOLDER ---
 if count > 0:
-    cv2.imwrite("detection_result.jpg", image)
-    print(f"✅ Success! Saved {count} detection(s) to 'detection_result.jpg'")
+    # 1. Get the directory where the original image lives
+    image_dir = os.path.dirname(IMAGE_PATH)
+    
+    # 2. Define the new folder path "inferenced"
+    output_dir = os.path.join(image_dir, "inferenced")
+    
+    # 3. Create the folder if it doesn't exist
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        print(f"📂 Created new folder: {output_dir}")
+        
+    # 4. Generate the new filename (e.g., image1_result.jpg)
+    original_filename = os.path.basename(IMAGE_PATH)
+    filename_only, ext = os.path.splitext(original_filename)
+    new_filename = f"{filename_only}_result{ext}"
+    
+    # 5. Join them to get the full save path
+    save_path = os.path.join(output_dir, new_filename)
+    
+    # 6. Save the file
+    cv2.imwrite(save_path, image)
+    print(f"✅ Success! Saved {count} detection(s) to: {save_path}")
 else:
     print("❌ No detections above threshold.")
