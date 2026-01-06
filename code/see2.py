@@ -6,9 +6,9 @@ import os  # <--- Added os library to handle folders
 # --- CONFIGURATION ---
 MODEL_PATH = "/home/lima/LimaRaspAI/Quantized/kagglemodelf16_quant.tflite"
 IMAGE_PATH = "/home/lima/LimaRaspAI/Images/image1.jpg"
-CONFIDENCE_THRESHOLD = 0.30
+CONFIDENCE_THRESHOLD = 0.20
 
-NMS_THRESHOLD = 0.35  # Overlap threshold (lower = stricter)
+NMS_THRESHOLD = 0.25  # Overlap threshold (lower = stricter)
 CLASSES = ["Ripe", "Green"] 
 
 # --- LOAD MODEL ---
@@ -105,7 +105,7 @@ if len(indices) > 0:
     # Save
     save_dir = os.path.join(os.path.dirname(IMAGE_PATH), "inferenced")
     os.makedirs(save_dir, exist_ok=True)
-    save_path = os.path.join(save_dir, f"{os.path.splitext(os.path.basename(IMAGE_PATH))[0]}_2result.jpg")
+    save_path = os.path.join(save_dir, f"{os.path.splitext(os.path.basename(IMAGE_PATH))[0]}_3result.jpg")
     cv2.imwrite(save_path, image)
     print(f"✅ Saved {len(indices)} clean detections to: {save_path}")
 
