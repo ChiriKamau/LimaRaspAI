@@ -5,12 +5,11 @@ import os  # <--- Added os library to handle folders
 
 # --- CONFIGURATION ---
 MODEL_PATH = "/home/lima/LimaRaspAI/Quantized/kagglemodelf16_quant.tflite"
-IMAGE_PATH = "/home/lima/LimaRaspAI/Images/image1.jpg"
+IMAGE_PATH = "/home/lima/LimaRaspAI/Images/image3.jpg"
 CONFIDENCE_THRESHOLD = 0.40
 
-# ⚠️ UPDATE: Set your specific classes here
-# If the model detects 'Green' as 'Ripe', swap these two words!
-CLASSES = ["Green", "Ripe"] 
+NMS_THRESHOLD = 0.45  # Overlap threshold (lower = stricter)
+CLASSES = ["Ripe", "Green"] 
 
 # --- LOAD MODEL ---
 print(f"Loading model: {MODEL_PATH}...")
@@ -24,23 +23,17 @@ input_w = input_details[0]['shape'][2]
 
 # --- PREPROCESS ---
 image = cv2.imread(IMAGE_PATH)
-if image is None:
-    print(f"Error: Could not read image from {IMAGE_PATH}")
-    exit()
-
+if image is None: exit(f"Error reading {IMAGE_PATH}")
 original_h, original_w = image.shape[:2]
 
-# Resize
-image_resized = cv2.resize(image, (input_w, input_h))
-input_data = cv2.cvtColor(image_resized, cv2.COLOR_BGR2RGB)
+# Resize & Normalize
+input_data = cv2.resize(image, (input_w, input_h))
+input_data = cv2.cvtColor(input_data, cv2.COLOR_BGR2RGB)
 input_data = np.expand_dims(input_data, axis=0)
 
-# Quantization Handling
 if input_details[0]['dtype'] == np.int8:
     scale, zero_point = input_details[0]['quantization']
-    input_data = (np.float32(input_data) / 255.0)
-    input_data = (input_data / scale + zero_point)
-    input_data = np.clip(input_data, -128, 127).astype(np.int8)
+    input_data = (np.float32(input_data) / 255.0 / scale + zero_point).astype(np.int8)
 else:
     input_data = (np.float32(input_data) / 255.0)
 
@@ -49,96 +42,72 @@ interpreter.set_tensor(input_details[0]['index'], input_data)
 interpreter.invoke()
 output_data = interpreter.get_tensor(output_details[0]['index'])
 
-# De-quantize output
+# De-quantize & Transpose
 if output_details[0]['dtype'] == np.int8:
     scale, zero_point = output_details[0]['quantization']
     output_data = (output_data.astype(np.float32) - zero_point) * scale
 
-# Transpose output if needed [1, 6, 2100] -> [1, 2100, 6]
-if output_data.shape[1] < output_data.shape[2]:
+if output_data.shape[1] < output_data.shape[2]: # [1, 6, 2100] -> [1, 2100, 6]
     output_data = np.transpose(output_data, (0, 2, 1))
 
-# --- DRAWING LOOP ---
-boxes = output_data[0]
-count = 0
+# --- PARSE BOXES ---
+boxes_list = []
+confidences_list = []
+class_ids_list = []
 
-# Auto-detect coordinate format
-is_normalized = boxes[0][0] < 2.0 
-if is_normalized:
-    print("ℹ️ Coordinates are NORMALIZED (0-1). Scaling up...")
-else:
-    print("ℹ️ Coordinates are PIXELS. Scaling relative to input size...")
+predictions = output_data[0]
+is_normalized = predictions[0][0] < 2.0 # Auto-detect format
 
-for box in boxes:
-    scores = box[4:]
+for pred in predictions:
+    scores = pred[4:]
     max_score = np.max(scores)
     
     if max_score > CONFIDENCE_THRESHOLD:
         class_id = np.argmax(scores)
+        cx, cy, w, h = pred[0], pred[1], pred[2], pred[3]
         
-        # Safety check for class index
-        if class_id >= len(CLASSES):
-            continue 
-
-        # Get Raw Box Coordinates
-        cx, cy, w, h = box[0], box[1], box[2], box[3]
-        
-        # Scale Coordinates
+        # Scale coordinates
         if is_normalized:
-            cx = cx * original_w
-            cy = cy * original_h
-            w = w * original_w
-            h = h * original_h
+            cx, cy, w, h = cx*original_w, cy*original_h, w*original_w, h*original_h
         else:
-            scale_x = original_w / input_w
-            scale_y = original_h / input_h
-            cx = cx * scale_x
-            cy = cy * scale_y
-            w = w * scale_x
-            h = h * scale_y
-        
-        # Convert to Top-Left
-        x1 = int(cx - (w / 2))
-        y1 = int(cy - (h / 2))
-        x2 = int(cx + (w / 2))
-        y2 = int(cy + (h / 2))
-        
-        # Clamp to image boundaries
-        x1 = max(0, x1)
-        y1 = max(0, y1)
-        x2 = min(original_w, x2)
-        y2 = min(original_h, y2)
-        
-        # Set Color: Green for 'Green', Red for 'Ripe'
-        # Note: BGR format (Blue, Green, Red)
-        color = (0, 255, 0) # Default Green
-        if CLASSES[class_id] == "Ripe":
-            color = (0, 0, 255) # Red for Ripe
-        
-        # Draw Box and Label
-        cv2.rectangle(image, (x1, y1), (x2, y2), color, 3)
-        
-        label = f"{CLASSES[class_id]}: {int(max_score * 100)}%"
-        (text_w, text_h), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
-        cv2.rectangle(image, (x1, y1 - 20), (x1 + text_w, y1), color, -1)
-        cv2.putText(image, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-        
-        count += 1
+            scale_x, scale_y = original_w/input_w, original_h/input_h
+            cx, cy, w, h = cx*scale_x, cy*scale_y, w*scale_x, h*scale_y
 
-# --- SAVE RESULT ---
-if count > 0:
-    image_dir = os.path.dirname(IMAGE_PATH)
-    output_dir = os.path.join(image_dir, "inferenced")
-    
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+        # Convert to Top-Left (x, y)
+        x = int(cx - (w / 2))
+        y = int(cy - (h / 2))
         
-    original_filename = os.path.basename(IMAGE_PATH)
-    filename_only, ext = os.path.splitext(original_filename)
-    new_filename = f"{filename_only}_result2{ext}"
-    save_path = os.path.join(output_dir, new_filename)
-    
+        boxes_list.append([x, y, int(w), int(h)])
+        confidences_list.append(float(max_score))
+        class_ids_list.append(class_id)
+
+# --- APPLY NMS (REMOVE DUPLICATES) ---
+indices = cv2.dnn.NMSBoxes(boxes_list, confidences_list, CONFIDENCE_THRESHOLD, NMS_THRESHOLD)
+
+# --- DRAW RESULTS ---
+if len(indices) > 0:
+    for i in indices.flatten():
+        x, y, w, h = boxes_list[i]
+        label = CLASSES[class_ids_list[i]]
+        conf = confidences_list[i]
+        
+        # Color: Red for Ripe, Green for Green
+        color = (0, 0, 255) if label == "Ripe" else (0, 255, 0)
+
+        cv2.rectangle(image, (x, y), (x + w, y + h), color, 3)
+        
+        # Text Label
+        text = f"{label} {int(conf * 100)}%"
+        (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+        cv2.rectangle(image, (x, y - 25), (x + tw, y), color, -1)
+        cv2.putText(image, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+    # Save
+    save_dir = os.path.join(os.path.dirname(IMAGE_PATH), "inferenced")
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = os.path.join(save_dir, f"{os.path.splitext(os.path.basename(IMAGE_PATH))[0]}_result.jpg")
     cv2.imwrite(save_path, image)
-    print(f"✅ Success! Saved {count} detection(s) to: {save_path}")
+    print(f"✅ Saved {len(indices)} clean detections to: {save_path}")
+
 else:
-    print("❌ No detections above threshold.")
+    print("❌ No objects detected.")
