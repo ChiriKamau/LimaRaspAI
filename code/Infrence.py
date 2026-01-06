@@ -4,7 +4,7 @@ import tflite_runtime.interpreter as tflite
 import time
 
 # --- CONFIGURATION ---
-MODEL_PATH = "/home/lima/LimaRaspAI/Quantized/model_quant.tflite"
+MODEL_PATH = "/home/lima/LimaRaspAI/Quantized/modelf16_quant.tflite"
 IMAGE_PATH = "/home/lima/LimaRaspAI/Images/image1.jpg"
 CONFIDENCE_THRESHOLD = 0.10 # Super low just to see ANY spark of life
 
