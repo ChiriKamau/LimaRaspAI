@@ -5,7 +5,7 @@ import os  # <--- Added os library to handle folders
 
 # --- CONFIGURATION ---
 MODEL_PATH = "/home/lima/LimaRaspAI/Quantized/kagglemodelf16_quant.tflite"
-IMAGE_PATH = "/home/lima/LimaRaspAI/Images/image1.jpg"
+IMAGE_PATH = "/home/lima/LimaRaspAI/Images/image2.jpg"
 CONFIDENCE_THRESHOLD = 0.20
 
 NMS_THRESHOLD = 0.25  # Overlap threshold (lower = stricter)
