@@ -7,7 +7,7 @@ import os  # <--- Added os library to handle folders
 # ==========================================
 
 # 1. PATHS
-YOLO_MODEL_PATH = "/home/lima/LimaRaspAI/Quantized/Yolo/grkagglemodelf16_quant.tflite"
+YOLO_MODEL_PATH = "/home/lima/LimaRaspAI/Quantized/Yolo/kagglemodelf16_quant.tflite"
 RIPE_CNN_PATH   = "/home/lima/LimaRaspAI/Quantized/CNN/ripecnn_v2_quantized.tflite"
 GREEN_CNN_PATH  = "/home/lima/LimaRaspAI/Quantized/CNN/greencnn_v2_quantized.tflite"
 IMAGE_PATH = "/home/lima/LimaRaspAI/Images/image3.jpg"
