@@ -2,29 +2,44 @@ import serial
 import time
 from datetime import datetime
 
-# Port setup
-try:
-    ser = serial.Serial('/dev/serial0', baudrate=9600, timeout=1)
-    print("UART Listener Started. Waiting for Pico...")
-except Exception as e:
-    print(f"Error: {e}")
-    exit()
+# ================== SERIAL CONFIG ==================
+# Replace with your actual port from `ls /dev/serial/by-id/`
+SERIAL_PORT = '/dev/ttyUSB0'
+BAUD_RATE = 9600
+
+ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+time.sleep(2)  # Wait for serial to initialize
+
+print("Listening for Pico data...")
 
 while True:
     if ser.in_waiting > 0:
         try:
-            # Read line and decode
+            # Read line from Pico
             line = ser.readline().decode('utf-8').strip()
             
-            # Create Timestamp
+            # Timestamp
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            # Split comma-separated values
+            # Split CSV fields
             data = line.split(',')
             
-            if len(data) == 5:
-                at, ah, st, m1, m2 = data
-                print(f"[{timestamp}] Air: {at}C/{ah}% | Soil T: {st}% | M1: {m1}% | M2: {m2}%")
+            if len(data) == 8:
+                airTemp, airHum, soilTemp, m1, m2, gp0, gp1, valve = data
+                
+                # Convert numeric values
+                airTemp = float(airTemp)
+                airHum = float(airHum)
+                soilTemp = int(soilTemp)
+                m1 = int(m1)
+                m2 = int(m2)
+                gp0 = int(gp0)
+                gp1 = int(gp1)
+                valve = int(valve)
+                
+                # Print nicely
+                print(f"[{timestamp}] Air: {airTemp}C / {airHum}% | Soil T: {soilTemp}% | "
+                      f"M1: {m1}% | M2: {m2}% | Pump1: {gp0} | Pump2: {gp1} | Valve: {valve}")
             else:
                 print(f"[{timestamp}] Raw: {line}")
                 
