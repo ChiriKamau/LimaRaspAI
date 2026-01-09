@@ -18,6 +18,21 @@ if not os.path.exists(DATA_FOLDER):
 
 print("Listening for Pico data...")
 
+def get_unique_filename(base_folder, base_name):
+    """
+    Returns a unique file path. If base_name.json exists, appends _1, _2, etc.
+    """
+    file_path = os.path.join(base_folder, f"{base_name}.json")
+    counter = 1
+    while os.path.exists(file_path):
+        file_path = os.path.join(base_folder, f"{base_name}_{counter}.json")
+        counter += 1
+    return file_path
+
+# Keep track of today's file
+current_date = datetime.now().strftime("%Y-%m-%d")
+current_file = get_unique_filename(DATA_FOLDER, current_date)
+
 while True:
     if ser.in_waiting > 0:
         try:
@@ -26,7 +41,6 @@ while True:
             
             # Timestamp
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            date_str = datetime.now().strftime("%Y-%m-%d")  # For filename
             
             # Split CSV fields
             data = line.split(',')
@@ -53,11 +67,14 @@ while True:
                       f"M2: {record['m2Pct']}% | Pump1: {record['gp0Active']} | "
                       f"Pump2: {record['gp1Active']} | Valve: {record['valveActive']}")
                 
-                # Save to JSON file
-                file_path = os.path.join(DATA_FOLDER, f"{date_str}.json")
+                # Check if day has changed
+                today_date = datetime.now().strftime("%Y-%m-%d")
+                if today_date != current_date:
+                    current_date = today_date
+                    current_file = get_unique_filename(DATA_FOLDER, current_date)
                 
-                # Open in append mode
-                with open(file_path, 'a') as f:
+                # Save to JSON file (append)
+                with open(current_file, 'a') as f:
                     f.write(json.dumps(record) + '\n')
                 
             else:
