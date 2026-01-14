@@ -11,7 +11,7 @@ import csv
 YOLO_MODEL_PATH = "/home/lima/LimaRaspAI/Quantized/Yolo/kagglemodelf16_quant.tflite"
 RIPE_CNN_PATH   = "/home/lima/LimaRaspAI/Quantized/CNN/ripecnn_v2_float32.tflite"
 GREEN_CNN_PATH  = "/home/lima/LimaRaspAI/Quantized/CNN/greencnn_v2_float32.tflite"
-IMAGE_PATH      = "/home/lima/LimaRaspAI/Images/image1.jpg"
+IMAGE_PATH      = "/home/lima/LimaRaspAI/Images/image2.jpg"
 
 YOLO_CLASSES = ["Green", "Ripe"]
 
