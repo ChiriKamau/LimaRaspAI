@@ -9,7 +9,7 @@ import time
 # --- FIREBASE CONFIGURATION ---
 # ==========================================
 
-FIREBASE_KEY_PATH = "/home/lima/Raspberry/firebase-adminsdk.json"
+FIREBASE_KEY_PATH = "/home/lima/firebase-adminsdk.json"
 FIREBASE_BUCKET = "espcam-69f58.appspot.com"
 
 INFERENCED_DIR = "/home/lima/LimaRaspAI/Images/inferenced"
