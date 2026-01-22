@@ -3,6 +3,7 @@ import numpy as np
 import tflite_runtime.interpreter as tflite
 import os
 import csv
+from collections import Counter
 
 # ==========================================
 # --- CONFIGURATION (RASPBERRY PI) ---
@@ -59,6 +60,7 @@ def run_cnn(interpreter, img):
     interpreter.invoke()
 
     y = interpreter.get_tensor(out[0]['index'])[0]
+
     if out[0]['dtype'] == np.int8:
         scale, zero = out[0]['quantization']
         y = (y.astype(np.float32) - zero) * scale
@@ -81,6 +83,7 @@ def pct(a, b):
 # --- LOAD MODELS ---
 # ==========================================
 
+print("Loading models...")
 yolo = load_interpreter(YOLO_MODEL_PATH)
 ripe_cnn = load_interpreter(RIPE_CNN_PATH)
 green_cnn = load_interpreter(GREEN_CNN_PATH)
@@ -95,7 +98,7 @@ yh, yw = yin[0]['shape'][1:3]
 
 image = cv2.imread(IMAGE_PATH)
 if image is None:
-    raise RuntimeError("Image not found")
+    raise RuntimeError("ERROR: Image not found")
 
 h0, w0 = image.shape[:2]
 final_img = image.copy()
@@ -118,6 +121,7 @@ yolo.set_tensor(yin[0]['index'], blob)
 yolo.invoke()
 
 pred = yolo.get_tensor(yout[0]['index'])
+
 if yout[0]['dtype'] == np.int8:
     scale, zero = yout[0]['quantization']
     pred = (pred.astype(np.float32) - zero) * scale
@@ -148,7 +152,7 @@ for p in pred:
 idxs = cv2.dnn.NMSBoxes(boxes, scores, CONFIDENCE_THRESHOLD, NMS_THRESHOLD)
 
 # ==========================================
-# --- METADATA COUNTERS ---
+# --- COUNTERS ---
 # ==========================================
 
 total = ripe = unripe = healthy = disease = 0
@@ -162,9 +166,13 @@ detections_log = []
 if len(idxs) > 0:
     for i in idxs.flatten():
         x, y, w, h = boxes[i]
-        x, y = max(0, x), max(0, y)
-        w, h = min(w, w0-x), min(h, h0-y)
-        if w < 10 or h < 10:
+
+        x = max(0, x)
+        y = max(0, y)
+        w = min(w, w0 - x)
+        h = min(h, h0 - y)
+
+        if w < 15 or h < 15:
             continue
 
         crop = image[y:y+h, x:x+w]
@@ -190,24 +198,21 @@ if len(idxs) > 0:
         detections_log.append({
             "fruit_id": total,
             "ripeness": yolo_label,
-            "disease_label": DISPLAY_NAMES[label],
+            "disease_label": DISPLAY_NAMES.get(label, label),
             "confidence": round(conf * 100, 2)
         })
 
         box_color = (0,0,255) if yolo_label=="Ripe" else (0,255,0)
-        thickness = max(4, w0//300)
-        font_scale = max(0.8, w0/1200)
+        thickness = max(3, w0//300)
+        font_scale = max(0.6, w0/1400)
 
-        text = f"{DISPLAY_NAMES[label]} {int(conf*100)}%"
-        (tw, th), bl = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX,
-                                       font_scale, thickness)
+        text = f"{DISPLAY_NAMES.get(label, label)} {int(conf*100)}%"
+        (tw, th), bl = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
 
         ty = y - 10 if y - 10 > th else y + th + 10
 
-        cv2.rectangle(final_img, (x, ty-th-bl), (x+tw+6, ty+bl),
-                      box_color, -1)
-        cv2.rectangle(final_img, (x, y), (x+w, y+h),
-                      box_color, thickness)
+        cv2.rectangle(final_img, (x, ty-th-bl), (x+tw+6, ty+bl), box_color, -1)
+        cv2.rectangle(final_img, (x, y), (x+w, y+h), box_color, thickness)
 
         cv2.putText(final_img, text, (x+3, ty),
                     cv2.FONT_HERSHEY_SIMPLEX,
@@ -227,6 +232,7 @@ img_out = os.path.join(out_dir, f"{base}.output.jpg")
 cv2.imwrite(img_out, final_img)
 
 csv_out = os.path.join(out_dir, "metadata.csv")
+
 update_csv(csv_out, {
     "image_name": os.path.basename(IMAGE_PATH),
     "total_fruits": total,
@@ -254,7 +260,7 @@ print(f"Diseased Fruits: {disease}")
 print("\n--- Disease Breakdown ---")
 if disease_counter:
     for k, v in disease_counter.items():
-        print(f"{DISPLAY_NAMES[k]}: {v}")
+        print(f"{DISPLAY_NAMES.get(k, k)}: {v}")
 else:
     print("No diseases detected")
 
@@ -263,6 +269,5 @@ for d in detections_log:
     print(f"Fruit #{d['fruit_id']} | {d['ripeness']} | {d['disease_label']} | {d['confidence']}%")
 
 print("===================================================")
-
 print(f"\nSaved image → {img_out}")
 print(f"Updated CSV → {csv_out}")
